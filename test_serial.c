@@ -9,7 +9,7 @@
 #include "serial.h"
 #include "libtimer.h"
 
-#define MCU_SERIAL_PORT_DEV "/dev/ttyS1"
+#define MCU_SERIAL_PORT_DEV "/dev/ttyUSB1"
 #define SERIAL_SPEED 921600
 
 
@@ -46,10 +46,99 @@ void timer_handler(size_t timer_id, void *user_data)
 	process_exit = 1;
 }
 
-void *send_thread(void * data)
+#define CMD_ENTER_SYS_SET 0
+enum {
+	PAGE_NUM_1 = 1,
+	PAGE_NUM_2,
+	PAGE_NUM_3,
+	PAGE_NUM_4,
+	PAGE_NUM_5,
+	PAGE_NUM_6,
+	PAGE_NUM_7,
+	PAGE_NUM_8,
+	PAGE_NUM_9,
+	PAGE_NUM_10,
+	PAGE_NUM_11,
+	PAGE_NUM_12,
+	PAGE_NUM_13,
+	PAGE_NUM_14,
+	PAGE_NUM_15,
+	PAGE_NUM_16,
+	PAGE_NUM_17,
+	PAGE_NUM_18,
+};
+
+ 
+void send_thread(void * data, int menu_id)
 {
 	struct serial_test *ser = (struct serial_test *)data;
 	int data_size, writed_cnt;
+	uint8_t menu_data[20][256] = {
+		{0x5a, 0x87, 0x0b,//0
+		 0x00, 0x26,
+		 0x01,
+		 0x00, 0x08, 0x00,
+		 0x00, 0x15, 0x06, 0x1b, 0x01, 0x09, 0x11, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x68, 0x40, 0xf9, 0x03, 0x00, 0x00, 0x00, 0x00,
+		 0x40, 0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0xb0, 0xa2},
+
+		{0x5a, 0x87, 0x0b,//1
+		 0x00, 0x26,
+		 0x01,
+		 0x00, 0x00, 0x00,
+		 0x02, 0x15, 0x06, 0x1b, 0x00, 0x04, 0x2A, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0xd5},
+
+		{0x5a, 0x87, 0x0b,//2
+		 0x00, 0x26,
+		 0x01,
+		 0x00, 0x00, 0x00,
+		 0x08, 0x15, 0x06, 0x1b, 0x00, 0x1C, 0x16, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0xF7},
+
+		{0x5a, 0x87, 0x0b,//3
+		 0x00, 0x26,
+		 0x01,
+		 0x00, 0x00, 0x00,
+		 0x00, 0x15, 0x06, 0x1b, 0x00, 0x19, 0x2b, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x00, 0x00, 0xF7},
+
+
+		//ID_MAIN_1
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_2, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+
+		//ID_SYSSET_MILE_2
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_5, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+
+		//ID_SYSSET_ALARM_3
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_5, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+
+		//ID_SYSSET_BTN_4
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_5, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+
+		//ID_SYSSET_TIME_5
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_5, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x21, 0x10, 0x29, 0x12, 0x00, 0x00, 0x01, 0x00, 0x00},
+
+		//ID_SYSSET_LIGHT_6
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_5, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+
+		//ID_SYSSET_FACTORY_7
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_5, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+
+		//ID_SYSSET_ALL_WHITE_8
+		{0x5a, 0x87, 0x0b, 0x00, 0x11, PAGE_NUM_5, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+	};
+
+	uint8_t *testbuf;
+	uint16_t i, page_data_n;
+
 	#define HEAD1 0x5A
 	#define HEAD2 0x87
 	#define PAGE_RQ 0x0B
@@ -64,39 +153,36 @@ void *send_thread(void * data)
 	#define METER_OFF_1 0x02
 	#define METER_OFF_2 0x03
 	#define PAGE_DATA 0x04
+	#define HEAD_SIZE 5
+	#define CKSUM_SIZE 1
+
+	printf("use menu_id %d\n", menu_id);
 
 	test_data[HEAD1_OFF] = HEAD1;
 	test_data[HEAD2_OFF] = HEAD2;
 	test_data[ID_OFF] = PAGE_RQ;
-	test_data[LENH_OFF] = 0x00;
-	test_data[LENL_OFF] = 0x06;
 
-	test_data[PAGE_DATA_OFF + PAGE_NUM] = 0x02;
-	test_data[PAGE_DATA_OFF + METER_OFF_0] = 0x00;
-	test_data[PAGE_DATA_OFF + METER_OFF_1] = 0x00;
-	test_data[PAGE_DATA_OFF + METER_OFF_2] = 0x00;
-	test_data[PAGE_DATA_OFF + PAGE_DATA + 0] = 0x00;
-	test_data[PAGE_DATA_OFF + PAGE_DATA + 1] = 0x01;
-	test_data[PAGE_DATA_OFF + PAGE_DATA + 2] = 0xd3;
+	test_data[LENH_OFF] = menu_data[menu_id][3];
+	test_data[LENL_OFF] = menu_data[menu_id][4];
 
-	//5a 87 0b 00 06 02 00 00 00 00 01 d3
+	page_data_n = menu_data[menu_id][3] << 8 | menu_data[menu_id][4];
+	testbuf = malloc(sizeof(uint8_t) * page_data_n);
+	memcpy(&test_data[PAGE_DATA_OFF], &menu_data[menu_id][PAGE_DATA_OFF], page_data_n);
+	test_data[PAGE_DATA_OFF + page_data_n + 1] = do_checksum(test_data, page_data_n + 5);
 
-	printf("checksun 0x%x\n", do_checksum(test_data, 6 + 5));
+	data_size = page_data_n + HEAD_SIZE + CKSUM_SIZE;
 
-	//data_size = sizeof(test_data) / sizeof(test_data[0]);
-	data_size = 6 + 5 + 1;
-	//while (1) {
-	//	if (ser->send_cnt) {
-	//		writed_cnt = serial_write(_serial_test.serial_port, test_data, data_size);
-	//		if (writed_cnt != data_size) {
-	//			printf("serial_write size fault writed_cnt %d data_size %d\n",
-	//				writed_cnt, data_size);
-	//		}
-	//		ser->send_cnt--;
-	//	}
-	//
-	//	usleep(10);
-	//};
+	if (ser->send_cnt) {
+		writed_cnt = serial_write(_serial_test.serial_port, test_data, data_size);
+		if (writed_cnt != data_size) {
+			printf("serial_write size fault writed_cnt %d data_size %d\n",
+				writed_cnt, data_size);
+		}
+		ser->send_cnt--;
+		usleep(500);
+	}
+
+	free(testbuf);
 }
 
 void *recv_thread(void * data)
@@ -167,52 +253,56 @@ void catch_sigterm()
 	signal(SIGINT, sig_term_handler);
 }
 
-int main(int argc, char *argvp[])
+int main(int argc, char *argv[])
 {
 	int ret, test_cnt;
 	size_t timer;
+	uint8_t cmd[10];
 
 	initialize();
 	process_exit = 0;
 
-	_serial_test.send_cnt = 0;
+	_serial_test.send_cnt = 2;
 
-	//_serial_test.serial_port = serial_new();
-	//if (!_serial_test.serial_port) {
-	//	printf("serial_port create fail\n");
-	//	return 0;
-	//}
-	//
-	//ret = serial_open(_serial_test.serial_port, MCU_SERIAL_PORT_DEV, SERIAL_SPEED);
-	//if (ret) {
-	//	printf("serial_port open fail\n");
-	//	return 0;
-	//}
+	_serial_test.serial_port = serial_new();
+	if (!_serial_test.serial_port) {
+		printf("serial_port create fail\n");
+		return 0;
+	}
+	
+	ret = serial_open(_serial_test.serial_port, MCU_SERIAL_PORT_DEV, SERIAL_SPEED);
+	if (ret < 0) {
+		printf("serial_port open fail\n");
+		return 0;
+	}
 
-	catch_sigterm();
-	timer = start_timer(500, timer_handler, TIMER_PERIODIC, &_serial_test);
+	//catch_sigterm();
+	//timer = start_timer(500, timer_handler, TIMER_PERIODIC, &_serial_test);
 
 	//if (pthread_create(&recv_thread_id, NULL, recv_thread, &_serial_test)) {
 	//	printf("Thread creation failed\n");
 	//	return 0;
 	//}
 
-	if (pthread_create(&recv_thread_id, NULL, send_thread, &_serial_test)) {
-		printf("Thread creation failed\n");
-		return 0;
-	}
+	//if (pthread_create(&recv_thread_id, NULL, send_thread, &_serial_test)) {
+	//	printf("Thread creation failed\n");
+	//	return 0;
+	//}
 
-	while (!process_exit) {
-		sleep(1);
-	};
-	//
+	//while (!process_exit) {
+	//	sleep(1);
+	//};
+	printf("argv[1] %s\n", argv[1]);
+	memcpy(&cmd[0], argv[1], 1);
+	send_thread(&_serial_test, cmd[0] - '0');
+
 	//printf("EXIT!!!!!\n");
 	//stop_timer(timer);
 	//finalize();
-	//serial_close(_serial_test.serial_port);
-	//serial_free(_serial_test.serial_port);
-	pthread_cancel(recv_thread_id);
-	pthread_join(recv_thread_id, NULL);
+	serial_close(_serial_test.serial_port);
+	serial_free(_serial_test.serial_port);
+	//pthread_cancel(recv_thread_id);
+	//pthread_join(recv_thread_id, NULL);
 
 	return 0;
 }
