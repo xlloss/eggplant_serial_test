@@ -43,7 +43,7 @@ void timer_handler(size_t timer_id, void *user_data)
 {
 	struct serial_test *ser = (struct serial_test *)user_data;
 
-	process_exit = 1;
+	//process_exit = 1;
 }
 
 #define CMD_ENTER_SYS_SET 0
@@ -69,7 +69,7 @@ enum {
 };
 
  
-void send_thread(void * data, int menu_id)
+void send_thread(void *data, int menu_id)
 {
 	struct serial_test *ser = (struct serial_test *)data;
 	int data_size, writed_cnt;
@@ -77,11 +77,11 @@ void send_thread(void * data, int menu_id)
 		{0x5a, 0x87, 0x0b,//0
 		 0x00, 0x26,
 		 0x01,
-		 0x00, 0x08, 0x00,
+		 0x00, 0x08, 0x01,
 		 0x00, 0x15, 0x06, 0x1b, 0x01, 0x09, 0x11, 0x00, 0x00, 0x00,
-		 0x00, 0x00, 0x68, 0x40, 0xf9, 0x03, 0x00, 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x68, 0x40, 0xf9, 0x03, 0x68, 0x40, 0xf9, 0x03,
 		 0x40, 0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		 0x00, 0x00, 0x00, 0xb0, 0xa2},
+		 0x00, 0x00, 0x00, 0x00, 0xa2},
 
 		{0x5a, 0x87, 0x0b,//1
 		 0x00, 0x26,
@@ -95,7 +95,7 @@ void send_thread(void * data, int menu_id)
 		{0x5a, 0x87, 0x0b,//2
 		 0x00, 0x26,
 		 0x01,
-		 0x00, 0x00, 0x00,
+		 0x00, 0x01, 0x00,
 		 0x08, 0x15, 0x06, 0x1b, 0x00, 0x1C, 0x16, 0x00, 0x00, 0x00,
 		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -104,7 +104,7 @@ void send_thread(void * data, int menu_id)
 		{0x5a, 0x87, 0x0b,//3
 		 0x00, 0x26,
 		 0x01,
-		 0x00, 0x00, 0x00,
+		 0x00, 0x00, 0x01,
 		 0x00, 0x15, 0x06, 0x1b, 0x00, 0x19, 0x2b, 0x00, 0x00, 0x00,
 		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -198,42 +198,16 @@ void *recv_thread(void * data)
 	buf_index_tmp = 0;
 
 	while (1) {
-		printf("TEST 3\n");
 		read_cnt = serial_read(_serial_test.serial_port, rec_buf, buf_size, 10);
-		if (read_cnt == 0) {
-			printf("read empy\n");
+		if (read_cnt <= 0) {
+			//printf("read empy\n");
+			usleep(100);
 			continue;
 		}
 
 		printf("read_cnt %d\n", read_cnt);
-		buf_index = 0;
-		checksum = 0;
-
-		while (buf_index < read_cnt) {
-			if (rec_buf[buf_index + HEAD1_OFF] == HEAD1 && rec_buf[buf_index + HEAD2_OFF] == HEAD2) {
-				if (rec_buf[buf_index + ID_OFF] == PAGE_RQ) {
-					data_len = rec_buf[buf_index + LENH_OFF] << 8 | rec_buf[buf_index + LENL_OFF];
-
-					page_data = (unsigned char *)malloc(sizeof(unsigned char) * data_len);
-					memcpy(page_data, &rec_buf[buf_index + PAGE_DATA_OFF], data_len);
-
-					for (i = 0; i < 5; i++) {
-						checksum = checksum ^ rec_buf[i];
-					}
-
-					for (i = 0; i < data_len; i++) {
-						checksum = checksum ^ page_data[i];
-					}
-
-					printf("page_data[0] 0x%x\n", page_data[0]);
-					printf("1 checksum 0x%x\n", checksum);
-					printf("2 checksun 0x%x\n", rec_buf[buf_index + PAGE_DATA_OFF + data_len]);
-					free(page_data);
-				}
-			}
-
-			buf_index++;
-		}
+		for (i = 0; i < read_cnt; i++)
+			printf("rec_buf[%d]=0x%x\n", i, rec_buf[i]);
 
 		usleep(100);
 	};
@@ -255,14 +229,14 @@ void catch_sigterm()
 
 int main(int argc, char *argv[])
 {
-	int ret, test_cnt;
+	int ret, test_cnt, count;
 	size_t timer;
 	uint8_t cmd[10];
 
 	initialize();
 	process_exit = 0;
 
-	_serial_test.send_cnt = 2;
+	_serial_test.send_cnt = 1;
 
 	_serial_test.serial_port = serial_new();
 	if (!_serial_test.serial_port) {
@@ -276,33 +250,46 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	//catch_sigterm();
+	catch_sigterm();
 	//timer = start_timer(500, timer_handler, TIMER_PERIODIC, &_serial_test);
+	
+	if (pthread_create(&recv_thread_id, NULL, recv_thread, &_serial_test)) {
+		printf("Thread creation failed\n");
+		return 0;
+	}
 
-	//if (pthread_create(&recv_thread_id, NULL, recv_thread, &_serial_test)) {
-	//	printf("Thread creation failed\n");
-	//	return 0;
-	//}
+	count = 0;
+	while (!process_exit) {
+		printf("send\n");
+		send_thread(&_serial_test, count);
+		//send_thread(&_serial_test, count);
+		count++;
+		if (count > 2)
+			count = 0;
+
+		_serial_test.send_cnt = 1;
+		sleep(1);
+	};
+	
+	printf("EXIT!!!!!\n");
+	stop_timer(timer);
+	finalize();
+	serial_close(_serial_test.serial_port);
+	serial_free(_serial_test.serial_port);
+//	pthread_cancel(recv_thread_id);
+//	pthread_join(recv_thread_id, NULL);
+
 
 	//if (pthread_create(&recv_thread_id, NULL, send_thread, &_serial_test)) {
 	//	printf("Thread creation failed\n");
 	//	return 0;
 	//}
 
-	//while (!process_exit) {
-	//	sleep(1);
-	//};
-	printf("argv[1] %s\n", argv[1]);
-	memcpy(&cmd[0], argv[1], 1);
-	send_thread(&_serial_test, cmd[0] - '0');
+//	printf("argv[1] %s\n", argv[1]);
+//	memcpy(&cmd[0], argv[1], 1);
+//	send_thread(&_serial_test, cmd[0] - '0');
 
-	//printf("EXIT!!!!!\n");
-	//stop_timer(timer);
-	//finalize();
-	serial_close(_serial_test.serial_port);
-	serial_free(_serial_test.serial_port);
-	//pthread_cancel(recv_thread_id);
-	//pthread_join(recv_thread_id, NULL);
+//	send_thread(&_serial_test, 0);
 
 	return 0;
 }
